@@ -1,6 +1,6 @@
 // Работа без интернета: приложение, картинки и озвучка сохраняются в телефоне.
 // Открывается сохранённая версия, а в фоне подтягивается свежая — правки приходят сами.
-const CACHE = "artem-tracker-v3";   // после переозвучки или новых картинок — увеличить номер
+const CACHE = "artem-tracker-v4";   // после переозвучки или новых картинок — увеличить номер
 const FILES = [
   "./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./img/boy-autumn.png", "./img/boy-winter.png", "./img/boy-spring.png", "./img/boy-summer.png",
@@ -44,7 +44,8 @@ self.addEventListener("fetch", e => {
       if (cached && isAudio) return cached;           // озвучка не меняется — сеть не нужна
       const fresh = fetch(e.request)
         .then(res => {
-          if (res && (res.ok || res.type === "opaque")) cache.put(e.request, res.clone());
+          // сохраняем только целые ответы (200); кусочки файла (206) сохранять нельзя
+          if (res && (res.status === 200 || res.type === "opaque")) cache.put(e.request, res.clone()).catch(() => {});
           return res;
         })
         .catch(() => null);

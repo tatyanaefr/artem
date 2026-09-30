@@ -1012,11 +1012,7 @@ function say(pieces) {
   // все кусочки загружаются сразу — чтобы между ними не было пауз
   const clips = pieces.map(text => {
     const id = pieceId(text);
-    if (recorded && !recorded.has(id)) return null;
-    const a = new Audio();
-    a.preload = "auto";
-    a.src = "audio/" + id + ".mp3";
-    return a;
+    return recorded && !recorded.has(id) ? null : loadClip(id);
   });
   let i = 0;
   const next = () => {
@@ -1026,12 +1022,30 @@ function say(pieces) {
     i++;
     setTalking(true);
     if (!clip) { robot(text, next); return; }
-    player = clip;
-    clip.onended = next;
-    clip.onerror = () => robot(text, next);
-    clip.play().catch(() => { if (token === speechToken) robot(text, next); });
+    clip.then(src => {
+      if (token !== speechToken) return;
+      const a = new Audio(src);
+      player = a;
+      a.onended = next;
+      a.onerror = () => robot(text, next);
+      a.play().catch(() => { if (token === speechToken) robot(text, next); });
+    });
   };
   next();
+}
+
+// Файл фразы забирается целиком и проигрывается из памяти — так звук надёжно работает
+// и из сохранённого на телефоне, и без интернета. Уже загруженные фразы запоминаются.
+const clipCache = new Map();
+function loadClip(id) {
+  if (!clipCache.has(id)) {
+    const url = "audio/" + id + ".mp3";
+    clipCache.set(id, fetch(url)
+      .then(r => { if (!r.ok) throw new Error("нет файла"); return r.blob(); })
+      .then(b => URL.createObjectURL(b))
+      .catch(() => { clipCache.delete(id); return url; }));   // не вышло — пробуем напрямую
+  }
+  return clipCache.get(id);
 }
 
 // Запасной голос — встроенный голос телефона

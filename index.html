@@ -510,6 +510,46 @@ body[data-season="winter"] .snowcap { display: block; }
   line-height: 1;
   font-weight: 400;
 }
+.icons .ic { position: relative; }
+.icons .ic.got::after {
+  content: "✓";
+  position: absolute;
+  right: -3px; bottom: -2px;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: #3bb54a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 13px;
+  text-align: center;
+  box-shadow: 0 0 0 1.5px #fff;
+}
+
+/* итог месяца: сколько садика и занятий — для оплаты */
+.summary {
+  margin-top: 14px;
+  padding: 10px 14px 12px;
+  background: rgba(255, 255, 255, .92);
+  border: 4px solid var(--board-edge);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+}
+.sum-title { text-align: center; font-size: 18px; font-weight: 900; color: var(--accent); margin-bottom: 6px; }
+.sum-row {
+  display: grid;
+  grid-template-columns: 30px 1fr auto auto;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 0;
+  border-top: 2px dotted #e6e1d6;
+  font-size: 16px;
+}
+.sum-title + .sum-row { border-top: 0; }
+.sum-row b { font-size: 22px; font-weight: 400; }
+.sum-row strong { font-size: 22px; font-weight: 900; color: var(--blue-dark); }
+.sum-row em { font-style: normal; font-size: 13px; color: #7a8699; }
+
 .sticker.on span { border-color: #f5b400; background: #fff6c9; transform: scale(1.25); }
 
 .legend {
@@ -616,6 +656,17 @@ body[data-season="winter"] .snowcap { display: block; }
   animation: pop .4s cubic-bezier(.2, 1.4, .5, 1) backwards;
 }
 .act:nth-child(2) { animation-delay: .1s; }
+.act.tap {
+  position: relative;
+  border: 3px solid transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.act.tap:active { transform: scale(.95); }
+.act.done { border-color: #3bb54a; background: #effbe9; }
+.act .mark { font-size: 12px; color: #7a8699; margin-top: 2px; }
+.act.done .mark { color: #2a8a36; font-weight: 900; }
 .act .e { font-size: 54px; line-height: 1.1; font-weight: 400; }
 .act .t { font-size: 15px; }
 
@@ -714,6 +765,8 @@ body[data-season="winter"] .snowcap { display: block; }
     <div class="legend" id="legend"></div>
   </div>
 
+  <div class="summary" id="summary"></div>
+
   <div class="hint-bottom">Нажми на день — и я расскажу, что тебя ждёт!</div>
 </div>
 
@@ -751,10 +804,14 @@ const CHILD = "Артём";
 
 // Занятия: картинка, подпись, как произносить,
 // и множественное ли число (чтобы сказать «будут танцы», но «будет рисование»)
+// done — что сказать, когда отмечаешь, что Артём был на занятии
 const ACTIVITIES = {
-  dance:   { emoji: "🩰", label: "танцы",       say: "танцы",              plural: true  },
-  drawing: { emoji: "🎨", label: "рисование",   say: "рисование",          plural: false },
-  tales:   { emoji: "📖", label: "нейросказки", say: "нейросказки у Гали", plural: true  },
+  dance:   { emoji: "🩰", label: "танцы",       say: "танцы",              plural: true,
+             done: "Молодец! Ты был на танцах!" },
+  drawing: { emoji: "🎨", label: "рисование",   say: "рисование",          plural: false,
+             done: "Молодец! Ты был на рисовании!" },
+  tales:   { emoji: "📖", label: "нейросказки", say: "нейросказки у Гали", plural: true,
+             done: "Молодец! Ты слушал нейросказки у Гали!" },
 };
 
 // Расписание по дням недели: 1 — понедельник ... 5 — пятница
@@ -874,6 +931,8 @@ const SEASON_OF_MONTH = ["winter", "winter", "spring", "spring", "spring", "summ
 
 const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
                 "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+const MONTHS_PREP = ["январь", "февраль", "март", "апрель", "май", "июнь",
+                     "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня",
                     "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
@@ -965,6 +1024,7 @@ function allPieces() {
     }
   }
   [MOTIVATION_WEEKDAY, MOTIVATION_WEEKEND, PRAISE_PAST, STAR_PHRASES].forEach(l => l.forEach(t => set.add(t)));
+  Object.values(ACTIVITIES).forEach(a => set.add(a.done));
   return [...set];
 }
 
@@ -1168,6 +1228,53 @@ function loadStars() {
 }
 function saveStars() { try { localStorage.setItem(STORE_KEY, JSON.stringify(stars)); } catch (e) {} }
 
+// Посещения занятий: { "2026-10-5": ["dance", "tales"] }. Звёздочка (stars) = был в садике.
+const VISITS_KEY = "artem-visits";
+let visits = {};
+function loadVisits() {
+  try { visits = JSON.parse(localStorage.getItem(VISITS_KEY) || "{}") || {}; } catch (e) { visits = {}; }
+}
+function saveVisits() { try { localStorage.setItem(VISITS_KEY, JSON.stringify(visits)); } catch (e) {} }
+function wasAt(d, act) { return (visits[keyOf(d)] || []).includes(act); }
+
+function toggleVisit(d, act, x, y) {
+  const k = keyOf(d);
+  const list = visits[k] || [];
+  if (list.includes(act)) {
+    visits[k] = list.filter(a => a !== act);
+    if (!visits[k].length) delete visits[k];
+  } else {
+    visits[k] = list.concat(act);
+    burst(x, y);
+    say([ACTIVITIES[act].done]);
+  }
+  saveVisits();
+  render();
+  if (current && keyOf(current) === k) paintActs();
+}
+
+// Итог месяца: сколько дней садика и сколько раз каждое занятие (из скольких по расписанию)
+function renderSummary(y, m) {
+  const days = new Date(y, m + 1, 0).getDate();
+  let sadik = 0, sadikPlan = 0;
+  const cnt = {}, plan = {};
+  Object.keys(ACTIVITIES).forEach(a => { cnt[a] = 0; plan[a] = 0; });
+  for (let n = 1; n <= days; n++) {
+    const d = new Date(y, m, n);
+    if (isWeekend(d)) continue;
+    sadikPlan++;
+    if (stars[keyOf(d)]) sadik++;
+    (SCHEDULE[d.getDay()] || []).forEach(a => { plan[a]++; if (wasAt(d, a)) cnt[a]++; });
+  }
+  const row = (icon, label, have, all) =>
+    '<div class="sum-row"><b>' + icon + '</b><span>' + label + '</span><strong>' + have +
+    '</strong><em>из ' + all + '</em></div>';
+  document.getElementById("summary").innerHTML =
+    '<div class="sum-title">Итого за ' + MONTHS_PREP[m] + '</div>' +
+    row("⭐", "садик, дней", sadik, sadikPlan) +
+    Object.entries(ACTIVITIES).map(([k, a]) => row(a.emoji, a.label, cnt[k], plan[k])).join("");
+}
+
 function burst(x, y) {
   for (let i = 0; i < 10; i++) {
     const s = document.createElement("span");
@@ -1316,21 +1423,34 @@ function render() {
 
     const icons = document.createElement("div");
     icons.className = "icons";
-    icons.textContent = isWeekend(d) ? "🏠" : activitiesOf(d).map(a => a.emoji).join("");
+    if (isWeekend(d)) {
+      icons.textContent = "🏠";
+    } else {
+      (SCHEDULE[d.getDay()] || []).forEach(a => {
+        const ic = document.createElement("span");
+        ic.className = "ic" + (wasAt(d, a) ? " got" : "");
+        ic.textContent = ACTIVITIES[a].emoji;
+        icons.appendChild(ic);
+      });
+    }
+    cell.append(num, icons);
 
-    const st = document.createElement("button");
-    st.className = "sticker" + (stars[k] ? " on" : "");
-    st.setAttribute("aria-label", "Звёздочка");
-    st.innerHTML = "<span>" + (stars[k] ? "⭐" : "") + "</span>";
-    st.addEventListener("click", e => { e.stopPropagation(); toggleStar(d, e.clientX, e.clientY); });
-
-    cell.append(num, icons, st);
+    if (!isWeekend(d)) {
+      const st = document.createElement("button");
+      st.className = "sticker" + (stars[k] ? " on" : "");
+      st.setAttribute("aria-label", "Был в садике");
+      st.innerHTML = "<span>" + (stars[k] ? "⭐" : "") + "</span>";
+      st.addEventListener("click", e => { e.stopPropagation(); toggleStar(d, e.clientX, e.clientY); });
+      cell.append(st);
+    }
     cell.addEventListener("click", () => openDay(d));
     grid.appendChild(cell);
   }
 
   const tail = (7 - (lead + days) % 7) % 7;
   for (let i = 0; i < tail; i++) grid.appendChild(emptyCell());
+
+  renderSummary(y, m);
 }
 
 function emptyCell() {
@@ -1367,17 +1487,8 @@ function openDay(d) {
   document.getElementById("cDate").textContent = MONTHS_GEN[d.getMonth()] + ", " + WEEKDAYS[d.getDay()];
   document.getElementById("cBadge").textContent = we ? "🏠 Выходной" : "🏫 Садик";
 
-  const acts = document.getElementById("cActs");
-  acts.innerHTML = "";
-  const list = we ? [{ emoji: "🤗", label: "день с семьёй" }] : activitiesOf(d);
-  list.forEach(a => {
-    const el = document.createElement("div");
-    el.className = "act";
-    el.innerHTML = '<div class="e"></div><div class="t"></div>';
-    el.querySelector(".e").textContent = a.emoji;
-    el.querySelector(".t").textContent = a.label;
-    acts.appendChild(el);
-  });
+  paintActs();
+  document.getElementById("bStar").style.display = we ? "none" : "";
 
   currentPieces = dayPieces(d);
   document.getElementById("cText").textContent = currentPieces.join(" ");
@@ -1391,7 +1502,29 @@ function openDay(d) {
 }
 
 function updateStarBtn() {
-  document.getElementById("bStar").textContent = stars[keyOf(current)] ? "⭐ Убрать" : "⭐ Звёздочка";
+  document.getElementById("bStar").textContent = stars[keyOf(current)] ? "⭐ Убрать" : "⭐ Был в садике";
+}
+
+// Карточки занятий: нажала — появилась галочка «был на занятии»
+function paintActs() {
+  const d = current;
+  const box = document.getElementById("cActs");
+  box.innerHTML = "";
+  if (isWeekend(d)) {
+    box.innerHTML = '<div class="act"><div class="e">🤗</div><div class="t">день с семьёй</div></div>';
+    return;
+  }
+  (SCHEDULE[d.getDay()] || []).forEach(k => {
+    const a = ACTIVITIES[k];
+    const el = document.createElement("button");
+    el.className = "act tap" + (wasAt(d, k) ? " done" : "");
+    el.innerHTML = '<div class="e"></div><div class="t"></div><div class="mark"></div>';
+    el.querySelector(".e").textContent = a.emoji;
+    el.querySelector(".t").textContent = a.label;
+    el.querySelector(".mark").textContent = wasAt(d, k) ? "✅ был" : "нажми, если был";
+    el.addEventListener("click", e => toggleVisit(d, k, e.clientX, e.clientY));
+    box.appendChild(el);
+  });
 }
 
 function closeDay() {
@@ -1411,6 +1544,7 @@ function openToday() {
 if (typeof document !== "undefined" && document.getElementById("grid")) {
   if (hasTTS) { findVoice(); speechSynthesis.onvoiceschanged = findVoice; }
   loadStars();
+  loadVisits();
 
   fetch("audio/index.json")
     .then(r => r.ok ? r.json() : null)
@@ -1452,7 +1586,7 @@ if (typeof document !== "undefined" && document.getElementById("grid")) {
     '<div><i style="background:var(--weekday);border:2px solid var(--weekday-edge)"></i>садик</div>' +
     '<div><i style="background:var(--weekend);border:2px solid var(--weekend-edge)"></i>выходной</div>' +
     Object.values(ACTIVITIES).map(a => "<div><b>" + a.emoji + "</b>" + a.label + "</div>").join("") +
-    "<div><b>⭐</b>день прожит</div>";
+    "<div><b>⭐</b>был в садике</div><div><b>✅</b>был на занятии</div>";
 
   document.getElementById("name").textContent = CHILD;
   const now = new Date();

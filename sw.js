@@ -1,6 +1,6 @@
 // Работа без интернета: приложение, картинки и озвучка сохраняются в телефоне.
 // Открывается сохранённая версия, а в фоне подтягивается свежая — правки приходят сами.
-const CACHE = "artem-tracker-v4";   // после переозвучки или новых картинок — увеличить номер
+const CACHE = "artem-tracker-v5";   // после переозвучки или новых картинок — увеличить номер
 const FILES = [
   "./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./img/boy-autumn.png", "./img/boy-winter.png", "./img/boy-spring.png", "./img/boy-summer.png",
